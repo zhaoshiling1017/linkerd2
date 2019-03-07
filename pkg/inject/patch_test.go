@@ -45,7 +45,7 @@ func TestPatch(t *testing.T) {
 	actual.addVolumeRoot()
 	actual.addVolume(trustAnchors)
 	actual.addVolume(secrets)
-	actual.addPodLabel(k8sPkg.ControllerNSLabel, controllerNamespace)
+	actual.AddPodLabel(k8sPkg.ControllerNSLabel, controllerNamespace)
 	actual.addPodAnnotation(k8sPkg.CreatedByAnnotation, createdBy)
 
 	expected := NewPatchDeployment()
