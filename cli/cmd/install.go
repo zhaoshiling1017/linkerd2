@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -151,6 +152,11 @@ func validateAndBuildConfig(options *installOptions) (*installConfig, error) {
 	proxyConfig, err := jsonMarshaler.MarshalToString(proxyConfig(options))
 	if err != nil {
 		return nil, err
+	}
+
+	// TODO: remove this when the Identity work gets merged
+	if options.enableTLS() {
+		return nil, errors.New("--tls optional is temporarily disallowed")
 	}
 
 	return &installConfig{
