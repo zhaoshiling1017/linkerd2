@@ -153,8 +153,13 @@ func (conf *ResourceConfig) GetPatch(
 		// The namespace isn't necessarily in the input so it has to be substituted
 		// at runtime. The proxy recognizes the "$NAME" syntax for this variable
 		// but not necessarily other variables.
+		name := metaAccessor.GetName()
+		if name == "" {
+			name = metaAccessor.GetGenerateName()
+		}
+
 		identity := k8s.TLSIdentity{
-			Name:                metaAccessor.GetName(),
+			Name:                name,
 			Kind:                strings.ToLower(conf.meta.Kind),
 			Namespace:           "$" + podNamespaceEnvVarName,
 			ControllerNamespace: conf.globalConfig.GetLinkerdNamespace(),
@@ -319,6 +324,7 @@ func (conf *ResourceConfig) parse(bytes []byte) error {
 	return nil
 }
 
+// GetOwnerReferences returns the list of the current workload parents
 func (conf *ResourceConfig) GetOwnerReferences() []metav1.OwnerReference {
 	return conf.podMeta.OwnerReferences
 }
@@ -464,6 +470,8 @@ func (conf *ResourceConfig) injectPodSpec(patch *Patch, identity k8s.TLSIdentity
 		}
 	}
 
+	saVolumeMount := conf.serviceAccountVolumeMount()
+
 	if conf.globalConfig.GetIdentityContext() != nil {
 		yes := true
 
@@ -506,6 +514,9 @@ func (conf *ResourceConfig) injectPodSpec(patch *Patch, identity k8s.TLSIdentity
 			{Name: configMapVolume.Name, MountPath: configMapBase, ReadOnly: true},
 			{Name: secretVolume.Name, MountPath: secretBase, ReadOnly: true},
 		}
+		if saVolumeMount != nil {
+			sidecar.VolumeMounts = append(sidecar.VolumeMounts, *saVolumeMount)
+		}
 
 		if len(conf.podSpec.Volumes) == 0 {
 			patch.addVolumeRoot()
@@ -534,11 +545,28 @@ func (conf *ResourceConfig) injectPodSpec(patch *Patch, identity k8s.TLSIdentity
 				RunAsUser:    &runAsUser,
 			},
 		}
+		if saVolumeMount != nil {
+			initContainer.VolumeMounts = []v1.VolumeMount{*saVolumeMount}
+		}
+
 		if len(conf.podSpec.InitContainers) == 0 {
 			patch.addInitContainerRoot()
 		}
 		patch.addInitContainer(initContainer)
 	}
+}
+
+func (conf *ResourceConfig) serviceAccountVolumeMount() *v1.VolumeMount {
+	// Probably always true, but wanna be super-safe
+	if containers := conf.podSpec.Containers; len(containers) > 0 {
+		for _, vm := range containers[0].VolumeMounts {
+			if vm.MountPath == k8s.MountPathServiceAccount {
+				vm := vm // pin
+				return &vm
+			}
+		}
+	}
+	return nil
 }
 
 // Given a ObjectMeta, update ObjectMeta in place with the new labels and
